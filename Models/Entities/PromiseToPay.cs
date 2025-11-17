@@ -34,6 +34,8 @@ public class PromiseToPay : BaseEntity
 
     public PaymentMode IntendedPaymentMode { get; set; }
 
+    public PaymentMode PaymentMode { get; set; }
+
     public PTPStatus Status { get; set; } = PTPStatus.Active;
 
     // For Split PTPs
@@ -65,6 +67,8 @@ public class PromiseToPay : BaseEntity
 
     public Guid? PaymentId { get; set; }
 
+    public Guid? LinkedPaymentId { get; set; }
+
     [ForeignKey(nameof(PaymentId))]
     public virtual Payment? Payment { get; set; }
 
@@ -78,7 +82,11 @@ public class PromiseToPay : BaseEntity
 
     public DateTime? ReminderSentDate { get; set; }
 
+    public DateTime? LastReminderSent { get; set; }
+
     public int NumberOfReminders { get; set; }
+
+    public int RemindersSent { get; set; }
 
     // Agent Information
     public Guid CreatedByUserId { get; set; }
