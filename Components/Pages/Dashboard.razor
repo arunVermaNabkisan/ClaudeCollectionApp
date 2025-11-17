@@ -1,0 +1,306 @@
+@page "/"
+@using ClaudeCollectionApp.Models.Entities
+@using ClaudeCollectionApp.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using System.Security.Claims
+@attribute [Authorize]
+@inject ICaseManagementService CaseService
+@inject IPaymentService PaymentService
+@inject IPromiseToPayService PTPService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+
+<PageTitle>Dashboard - Collection Management</PageTitle>
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Dashboard</h1>
+        <p>Welcome back, @currentUser?.FullName</p>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-container">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading dashboard data...</p>
+        </div>
+    }
+    else
+    {
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: #e3f2fd;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1976d2" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Total Cases</div>
+                    <div class="kpi-value">@dashboardData.TotalCases</div>
+                    <div class="kpi-change positive">Active: @dashboardData.ActiveCases</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: #f3e5f5;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7b1fa2" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Total Outstanding</div>
+                    <div class="kpi-value">₹@FormatAmount(dashboardData.TotalOutstanding)</div>
+                    <div class="kpi-change">Portfolio Value</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: #e8f5e9;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#388e3c" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Total Collected</div>
+                    <div class="kpi-value">₹@FormatAmount(dashboardData.TotalCollected)</div>
+                    <div class="kpi-change positive">@dashboardData.CollectionRate.ToString("F1")% Rate</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: #fff3e0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f57c00" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Active PTPs</div>
+                    <div class="kpi-value">@dashboardData.ActivePTPs</div>
+                    <div class="kpi-change">@dashboardData.PTPKeepRatio.ToString("F1")% Keep Ratio</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts and Lists Row -->
+        <div class="dashboard-row">
+            <!-- Bucket Distribution -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h3>Delinquency Bucket Distribution</h3>
+                </div>
+                <div class="card-body">
+                    @if (dashboardData.BucketDistribution.Any())
+                    {
+                        <div class="bucket-list">
+                            @foreach (var bucket in dashboardData.BucketDistribution.OrderBy(b => b.Key))
+                            {
+                                var percentage = dashboardData.TotalCases > 0 ? (bucket.Value * 100.0 / dashboardData.TotalCases) : 0;
+                                <div class="bucket-item">
+                                    <div class="bucket-info">
+                                        <span class="bucket-name">@bucket.Key</span>
+                                        <span class="bucket-count">@bucket.Value cases</span>
+                                    </div>
+                                    <div class="bucket-bar">
+                                        <div class="bucket-progress" style="width: @percentage%"></div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No bucket data available</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h3>My Recent Cases</h3>
+                    <a href="/Cases" class="view-all-link">View All</a>
+                </div>
+                <div class="card-body">
+                    @if (myCases.Any())
+                    {
+                        <div class="case-list">
+                            @foreach (var case_ in myCases.Take(5))
+                            {
+                                <div class="case-item" @onclick="@(() => NavigateToCase(case_.Id))">
+                                    <div class="case-info">
+                                        <div class="case-number">@case_.CaseNumber</div>
+                                        <div class="case-customer">@case_.Customer.FullName</div>
+                                    </div>
+                                    <div class="case-meta">
+                                        <span class="badge badge-@GetStatusClass(case_.Status)">@case_.Status</span>
+                                        <div class="case-amount">₹@FormatAmount(case_.TotalOutstandingAmount)</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No cases assigned to you</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Analytics -->
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h3>Payment Analytics (Last 30 Days)</h3>
+            </div>
+            <div class="card-body">
+                <div class="analytics-grid">
+                    <div class="analytics-item">
+                        <div class="analytics-label">Total Payments</div>
+                        <div class="analytics-value">@dashboardData.PaymentStats.TotalPayments</div>
+                    </div>
+                    <div class="analytics-item">
+                        <div class="analytics-label">Successful</div>
+                        <div class="analytics-value text-success">@dashboardData.PaymentStats.SuccessfulPayments</div>
+                    </div>
+                    <div class="analytics-item">
+                        <div class="analytics-label">Bounced</div>
+                        <div class="analytics-value text-danger">@dashboardData.PaymentStats.BouncedPayments</div>
+                    </div>
+                    <div class="analytics-item">
+                        <div class="analytics-label">Success Rate</div>
+                        <div class="analytics-value">@dashboardData.PaymentStats.SuccessRate.ToString("F1")%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private ApplicationUser? currentUser;
+    private DashboardData dashboardData = new();
+    private List<CollectionCase> myCases = new();
+    private bool isLoading = true;
+
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            isLoading = true;
+
+            // Get current user
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userIdClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                currentUser = await UserManager.FindByIdAsync(userId.ToString());
+
+                if (currentUser != null)
+                {
+                    // Load portfolio analytics
+                    var analytics = await CaseService.GetPortfolioAnalyticsAsync(userId);
+                    dashboardData.TotalCases = (int)(analytics.GetValueOrDefault("TotalCases") ?? 0);
+                    dashboardData.ActiveCases = (int)(analytics.GetValueOrDefault("ActiveCases") ?? 0);
+                    dashboardData.TotalOutstanding = (decimal)(analytics.GetValueOrDefault("TotalOutstanding") ?? 0m);
+                    dashboardData.TotalCollected = (decimal)(analytics.GetValueOrDefault("TotalCollected") ?? 0m);
+                    dashboardData.CollectionRate = (decimal)(analytics.GetValueOrDefault("CollectionRate") ?? 0m);
+
+                    // Load bucket distribution
+                    dashboardData.BucketDistribution = await CaseService.GetBucketDistributionAsync(userId);
+
+                    // Load my cases
+                    myCases = (await CaseService.GetMyCasesAsync(userId)).Take(10).ToList();
+
+                    // Load PTP performance
+                    var ptpPerf = await PTPService.GetPTPPerformanceAsync(userId);
+                    dashboardData.ActivePTPs = (int)(ptpPerf.GetValueOrDefault("TotalPTPs") ?? 0);
+                    dashboardData.PTPKeepRatio = (decimal)(ptpPerf.GetValueOrDefault("KeepRatio") ?? 0m);
+
+                    // Load payment analytics (last 30 days)
+                    var paymentAnalytics = await PaymentService.GetPaymentAnalyticsAsync(
+                        userId,
+                        DateTime.UtcNow.AddDays(-30),
+                        DateTime.UtcNow
+                    );
+
+                    dashboardData.PaymentStats.TotalPayments = (int)(paymentAnalytics.GetValueOrDefault("TotalPayments") ?? 0);
+                    dashboardData.PaymentStats.SuccessfulPayments = (int)(paymentAnalytics.GetValueOrDefault("SuccessfulPayments") ?? 0);
+                    dashboardData.PaymentStats.BouncedPayments = (int)(paymentAnalytics.GetValueOrDefault("BouncedPayments") ?? 0);
+                    dashboardData.PaymentStats.SuccessRate = (decimal)(paymentAnalytics.GetValueOrDefault("SuccessRate") ?? 0m);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string FormatAmount(decimal amount)
+    {
+        if (amount >= 10000000) // 1 Crore
+            return $"{(amount / 10000000):F2}Cr";
+        if (amount >= 100000) // 1 Lakh
+            return $"{(amount / 100000):F2}L";
+        if (amount >= 1000) // 1 Thousand
+            return $"{(amount / 1000):F2}K";
+        return amount.ToString("N0");
+    }
+
+    private string GetStatusClass(ClaudeCollectionApp.Models.Enums.CaseStatus status)
+    {
+        return status switch
+        {
+            ClaudeCollectionApp.Models.Enums.CaseStatus.New => "primary",
+            ClaudeCollectionApp.Models.Enums.CaseStatus.Active => "info",
+            ClaudeCollectionApp.Models.Enums.CaseStatus.Resolved => "success",
+            ClaudeCollectionApp.Models.Enums.CaseStatus.Closed => "secondary",
+            _ => "secondary"
+        };
+    }
+
+    private void NavigateToCase(Guid caseId)
+    {
+        NavigationManager.NavigateTo($"/Cases/{caseId}");
+    }
+
+    private class DashboardData
+    {
+        public int TotalCases { get; set; }
+        public int ActiveCases { get; set; }
+        public decimal TotalOutstanding { get; set; }
+        public decimal TotalCollected { get; set; }
+        public decimal CollectionRate { get; set; }
+        public int ActivePTPs { get; set; }
+        public decimal PTPKeepRatio { get; set; }
+        public Dictionary<ClaudeCollectionApp.Models.Enums.DelinquencyBucket, int> BucketDistribution { get; set; } = new();
+        public PaymentStatistics PaymentStats { get; set; } = new();
+    }
+
+    private class PaymentStatistics
+    {
+        public int TotalPayments { get; set; }
+        public int SuccessfulPayments { get; set; }
+        public int BouncedPayments { get; set; }
+        public decimal SuccessRate { get; set; }
+    }
+}

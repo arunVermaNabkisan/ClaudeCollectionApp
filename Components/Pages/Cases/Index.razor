@@ -1,0 +1,444 @@
+@page "/Cases"
+@using ClaudeCollectionApp.Models.Entities
+@using ClaudeCollectionApp.Models.Enums
+@using ClaudeCollectionApp.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject ICaseManagementService CaseService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Cases - Collection Management</PageTitle>
+
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Collection Cases</h1>
+            <p>Manage and track all collection cases</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <input type="text" class="form-control" placeholder="Search by case number, customer name..." @bind="searchTerm" @bind:event="oninput" />
+        </div>
+
+        <div class="filter-group">
+            <select class="form-select" @bind="selectedBucket">
+                <option value="">All Buckets</option>
+                @foreach (var bucket in Enum.GetValues<DelinquencyBucket>())
+                {
+                    <option value="@bucket">@bucket</option>
+                }
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <select class="form-select" @bind="selectedStatus">
+                <option value="">All Statuses</option>
+                @foreach (var status in Enum.GetValues<CaseStatus>())
+                {
+                    <option value="@status">@status</option>
+                }
+            </select>
+        </div>
+
+        <button class="btn btn-primary" @onclick="LoadCases">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            Search
+        </button>
+    </div>
+
+    <!-- Cases Table -->
+    @if (isLoading)
+    {
+        <div class="loading-container">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p>Loading cases...</p>
+        </div>
+    }
+    else if (cases.Any())
+    {
+        <div class="table-card">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Case Number</th>
+                        <th>Customer</th>
+                        <th>Loan Account</th>
+                        <th>Bucket</th>
+                        <th>DPD</th>
+                        <th>Outstanding</th>
+                        <th>Status</th>
+                        <th>Assigned To</th>
+                        <th>Priority</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var case_ in cases)
+                    {
+                        <tr>
+                            <td>
+                                <a href="/Cases/@case_.Id" class="link-primary">@case_.CaseNumber</a>
+                            </td>
+                            <td>@case_.Customer.FullName</td>
+                            <td>@case_.LoanAccount.LoanAccountNumber</td>
+                            <td><span class="badge badge-@GetBucketClass(case_.CurrentBucket)">@case_.CurrentBucket</span></td>
+                            <td>@case_.DaysPastDue</td>
+                            <td>₹@case_.TotalOutstandingAmount.ToString("N2")</td>
+                            <td><span class="badge badge-@GetStatusClass(case_.Status)">@case_.Status</span></td>
+                            <td>@(case_.AssignedToUser?.FullName ?? "Unassigned")</td>
+                            <td><span class="priority-badge priority-@case_.Priority">@case_.Priority</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="@(() => NavigateToCase(case_.Id))">
+                                    View
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, totalCount) of @totalCount cases
+                </div>
+                <div class="pagination-controls">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                        Previous
+                    </button>
+                    <span class="page-indicator">Page @currentPage of @totalPages</span>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(currentPage >= totalPages)">
+                        Next
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <p>No cases found</p>
+        </div>
+    }
+</div>
+
+<style>
+    .page-container {
+        padding: 24px;
+        background: #f5f7fa;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .page-header h1 {
+        font-size: 28px;
+        font-weight: 600;
+        color: #1a202c;
+        margin-bottom: 4px;
+    }
+
+    .page-header p {
+        color: #718096;
+        font-size: 14px;
+    }
+
+    .filter-bar {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 24px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .filter-group {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .form-control, .form-select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .form-control:focus, .form-select:focus {
+        outline: none;
+        border-color: #4299e1;
+        box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background: #4299e1;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #3182ce;
+    }
+
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+
+    .btn-outline-primary {
+        background: transparent;
+        border: 1px solid #4299e1;
+        color: #4299e1;
+    }
+
+    .btn-outline-primary:hover {
+        background: #4299e1;
+        color: white;
+    }
+
+    .btn-outline-secondary {
+        background: transparent;
+        border: 1px solid #cbd5e0;
+        color: #4a5568;
+    }
+
+    .btn-outline-secondary:hover:not(:disabled) {
+        background: #f7fafc;
+    }
+
+    .btn-outline-secondary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .table-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .data-table thead {
+        background: #f7fafc;
+    }
+
+    .data-table th {
+        padding: 16px;
+        text-align: left;
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #e2e8f0;
+    }
+
+    .data-table td {
+        padding: 16px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 14px;
+        color: #1a202c;
+    }
+
+    .data-table tbody tr:hover {
+        background: #f7fafc;
+    }
+
+    .link-primary {
+        color: #4299e1;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .link-primary:hover {
+        text-decoration: underline;
+    }
+
+    .priority-badge {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        text-align: center;
+        line-height: 40px;
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .priority-badge[class*="priority-"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .pagination-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .pagination-info {
+        color: #718096;
+        font-size: 14px;
+    }
+
+    .pagination-controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .page-indicator {
+        padding: 0 12px;
+        color: #4a5568;
+        font-size: 14px;
+    }
+
+    .empty-state {
+        background: white;
+        border-radius: 12px;
+        padding: 60px 20px;
+        text-align: center;
+        color: #a0aec0;
+    }
+
+    .loading-container {
+        background: white;
+        border-radius: 12px;
+        padding: 60px 20px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+    }
+</style>
+
+@code {
+    private List<CollectionCase> cases = new();
+    private string searchTerm = string.Empty;
+    private string selectedBucket = string.Empty;
+    private string selectedStatus = string.Empty;
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private int pageSize = 20;
+    private int totalCount = 0;
+    private int totalPages => (int)Math.Ceiling((double)totalCount / pageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCases();
+    }
+
+    private async Task LoadCases()
+    {
+        try
+        {
+            isLoading = true;
+
+            DelinquencyBucket? bucket = string.IsNullOrEmpty(selectedBucket) ? null : Enum.Parse<DelinquencyBucket>(selectedBucket);
+            CaseStatus? status = string.IsNullOrEmpty(selectedStatus) ? null : Enum.Parse<CaseStatus>(selectedStatus);
+
+            var (loadedCases, count) = await CaseService.GetCasesPagedAsync(
+                currentPage,
+                pageSize,
+                searchTerm,
+                bucket,
+                status
+            );
+
+            cases = loadedCases.ToList();
+            totalCount = count;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading cases: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await LoadCases();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            await LoadCases();
+        }
+    }
+
+    private void NavigateToCase(Guid caseId)
+    {
+        NavigationManager.NavigateTo($"/Cases/{caseId}");
+    }
+
+    private string GetBucketClass(DelinquencyBucket bucket)
+    {
+        return bucket switch
+        {
+            DelinquencyBucket.X => "success",
+            DelinquencyBucket.X1_30 => "info",
+            DelinquencyBucket.X31_60 => "warning",
+            DelinquencyBucket.X61_90 => "warning",
+            DelinquencyBucket.X91_120 => "danger",
+            DelinquencyBucket.X121_150 => "danger",
+            DelinquencyBucket.X151Plus => "danger",
+            _ => "secondary"
+        };
+    }
+
+    private string GetStatusClass(CaseStatus status)
+    {
+        return status switch
+        {
+            CaseStatus.New => "primary",
+            CaseStatus.Active => "info",
+            CaseStatus.Resolved => "success",
+            CaseStatus.Closed => "secondary",
+            _ => "secondary"
+        };
+    }
+}
