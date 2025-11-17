@@ -42,6 +42,9 @@ public class CollectionCase : BaseEntity
     public decimal TotalOutstanding { get; set; }
 
     [Column(TypeName = "decimal(18,2)")]
+    public decimal TotalOutstandingAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
     public decimal OverdueAmount { get; set; }
 
     public DateTime? FirstDelinquencyDate { get; set; }
