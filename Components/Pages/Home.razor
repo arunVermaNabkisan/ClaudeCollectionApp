@@ -1,0 +1,233 @@
+@page "/"
+@rendermode InteractiveServer
+@using iText.Kernel.Pdf
+@using iText.Kernel.Utils
+@using System.IO
+@inject IJSRuntime JSRuntime
+
+<PageTitle>PDF Merger - Combine PDFs Instantly</PageTitle>
+
+<header>
+    <h1>PDF Merger</h1>
+    <p>Combine multiple PDFs into one document</p>
+</header>
+
+<div class="upload-section">
+    <div class="file-upload @(file1Name != null ? "file-selected" : "")">
+        <label for="file1" class="upload-box">
+            <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            <p>Click to upload or drag and drop</p>
+            <span class="file-name">@(file1Name ?? "First PDF")</span>
+        </label>
+        <InputFile id="file1" OnChange="@(e => LoadFile1(e))" accept=".pdf" style="display: none;" />
+    </div>
+
+    <div class="plus-icon">
+        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+    </div>
+
+    <div class="file-upload @(file2Name != null ? "file-selected" : "")">
+        <label for="file2" class="upload-box">
+            <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            <p>Click to upload or drag and drop</p>
+            <span class="file-name">@(file2Name ?? "Second PDF")</span>
+        </label>
+        <InputFile id="file2" OnChange="@(e => LoadFile2(e))" accept=".pdf" style="display: none;" />
+    </div>
+</div>
+
+<div class="action-section">
+    <button class="merge-btn" @onclick="MergePDFs" disabled="@(!CanMerge)">
+        @if (isMerging)
+        {
+            <text>Merging...</text>
+        }
+        else
+        {
+            <text>Merge PDFs</text>
+        }
+    </button>
+
+    @if (showProgress)
+    {
+        <div class="progress-container">
+            <div class="progress-bar" style="width: @(progress)%;">@progress%</div>
+        </div>
+    }
+
+    <div class="status-message @statusClass">@statusMessage</div>
+</div>
+
+<div class="info-section">
+    <h3>How to use:</h3>
+    <ol>
+        <li>Click on the upload boxes above or drag and drop your PDF files</li>
+        <li>Select the first PDF file you want to merge</li>
+        <li>Select the second PDF file you want to merge</li>
+        <li>Click the "Merge PDFs" button</li>
+        <li>Your merged PDF will be automatically downloaded</li>
+    </ol>
+</div>
+
+<footer>
+    <p>🔒 Your PDFs are processed locally on the server. Files are never stored permanently.</p>
+</footer>
+
+@code {
+    private byte[]? file1Data;
+    private byte[]? file2Data;
+    private string? file1Name;
+    private string? file2Name;
+    private bool isMerging;
+    private bool showProgress;
+    private int progress;
+    private string statusMessage = string.Empty;
+    private string statusClass = string.Empty;
+
+    private bool CanMerge => file1Data != null && file2Data != null && !isMerging;
+
+    private async Task LoadFile1(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file.ContentType != "application/pdf")
+            {
+                SetStatus("Please select a valid PDF file", "error");
+                return;
+            }
+
+            file1Name = file.Name;
+            using var memoryStream = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024).CopyToAsync(memoryStream);
+            file1Data = memoryStream.ToArray();
+            SetStatus("First PDF loaded successfully", "success");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error loading first PDF: {ex.Message}", "error");
+        }
+    }
+
+    private async Task LoadFile2(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file.ContentType != "application/pdf")
+            {
+                SetStatus("Please select a valid PDF file", "error");
+                return;
+            }
+
+            file2Name = file.Name;
+            using var memoryStream = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024).CopyToAsync(memoryStream);
+            file2Data = memoryStream.ToArray();
+            SetStatus("Second PDF loaded successfully", "success");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error loading second PDF: {ex.Message}", "error");
+        }
+    }
+
+    private async Task MergePDFs()
+    {
+        if (file1Data == null || file2Data == null)
+        {
+            SetStatus("Please select both PDF files", "error");
+            return;
+        }
+
+        try
+        {
+            isMerging = true;
+            showProgress = true;
+            progress = 0;
+            SetStatus("Starting merge...", "info");
+            StateHasChanged();
+
+            await Task.Delay(100); // Small delay to allow UI update
+
+            // Update progress
+            progress = 30;
+            SetStatus("Processing first PDF...", "info");
+            StateHasChanged();
+            await Task.Delay(100);
+
+            // Create merged PDF using iText7
+            using var outputStream = new MemoryStream();
+            using var pdfWriter = new PdfWriter(outputStream);
+            using var pdfDocument = new PdfDocument(pdfWriter);
+            var merger = new PdfMerger(pdfDocument);
+
+            // Process first PDF
+            using (var stream1 = new MemoryStream(file1Data))
+            using (var pdf1 = new PdfDocument(new PdfReader(stream1)))
+            {
+                merger.Merge(pdf1, 1, pdf1.GetNumberOfPages());
+            }
+
+            progress = 60;
+            SetStatus("Processing second PDF...", "info");
+            StateHasChanged();
+            await Task.Delay(100);
+
+            // Process second PDF
+            using (var stream2 = new MemoryStream(file2Data))
+            using (var pdf2 = new PdfDocument(new PdfReader(stream2)))
+            {
+                merger.Merge(pdf2, 1, pdf2.GetNumberOfPages());
+            }
+
+            progress = 90;
+            SetStatus("Finalizing merged PDF...", "info");
+            StateHasChanged();
+            await Task.Delay(100);
+
+            pdfDocument.Close();
+
+            // Get the merged PDF bytes
+            var mergedPdfBytes = outputStream.ToArray();
+
+            progress = 100;
+            SetStatus("Merge completed! Downloading...", "success");
+            StateHasChanged();
+
+            // Trigger download using JavaScript interop
+            var fileName = $"merged-pdf-{DateTime.Now:yyyyMMdd-HHmmss}.pdf";
+            await DownloadFile(fileName, mergedPdfBytes);
+
+            await Task.Delay(2000);
+            SetStatus("PDF merged and downloaded successfully!", "success");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error merging PDFs: {ex.Message}", "error");
+        }
+        finally
+        {
+            isMerging = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DownloadFile(string fileName, byte[] data)
+    {
+        var base64 = Convert.ToBase64String(data);
+        await JSRuntime.InvokeVoidAsync("downloadFile", fileName, base64);
+    }
+
+    private void SetStatus(string message, string statusType)
+    {
+        statusMessage = message;
+        statusClass = statusType;
+    }
+}
