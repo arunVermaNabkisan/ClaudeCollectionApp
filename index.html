@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Merge App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PDF Merge Application</h1>
+            <p>Merge two PDF files into one</p>
+        </header>
+
+        <main>
+            <div class="upload-section">
+                <div class="file-upload">
+                    <label for="pdf1">
+                        <div class="upload-box">
+                            <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Click to upload first PDF</p>
+                            <span class="file-name" id="filename1">No file selected</span>
+                        </div>
+                    </label>
+                    <input type="file" id="pdf1" accept=".pdf" hidden>
+                </div>
+
+                <div class="plus-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </div>
+
+                <div class="file-upload">
+                    <label for="pdf2">
+                        <div class="upload-box">
+                            <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Click to upload second PDF</p>
+                            <span class="file-name" id="filename2">No file selected</span>
+                        </div>
+                    </label>
+                    <input type="file" id="pdf2" accept=".pdf" hidden>
+                </div>
+            </div>
+
+            <div class="action-section">
+                <button id="mergeBtn" class="merge-btn" disabled>Merge PDFs</button>
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p class="status-message" id="statusMessage"></p>
+            </div>
+
+            <div class="info-section">
+                <h3>How to use:</h3>
+                <ol>
+                    <li>Select the first PDF file by clicking on the first upload box</li>
+                    <li>Select the second PDF file by clicking on the second upload box</li>
+                    <li>Click the "Merge PDFs" button to combine them</li>
+                    <li>The merged PDF will be automatically downloaded</li>
+                </ol>
+            </div>
+        </main>
+
+        <footer>
+            <p>All processing happens in your browser - your files are never uploaded to a server</p>
+        </footer>
+    </div>
+
+    <!-- Using PDF-lib from CDN -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
