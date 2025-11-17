@@ -82,11 +82,12 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RequireAdmin", policy => policy.RequireRole("SystemAdmin"));
 });
 
-// TODO: Register application services (will be added as we build them)
-// builder.Services.AddScoped<ICaseManagementService, CaseManagementService>();
+// Register application services
+builder.Services.AddScoped<ClaudeCollectionApp.Services.Interfaces.ICaseManagementService, ClaudeCollectionApp.Services.Implementations.CaseManagementService>();
+builder.Services.AddScoped<ClaudeCollectionApp.Services.Interfaces.IPromiseToPayService, ClaudeCollectionApp.Services.Implementations.PromiseToPayService>();
+builder.Services.AddScoped<ClaudeCollectionApp.Services.Interfaces.IPaymentService, ClaudeCollectionApp.Services.Implementations.PaymentService>();
+// TODO: Add remaining services as they are implemented
 // builder.Services.AddScoped<ICustomerService, CustomerService>();
-// builder.Services.AddScoped<IPromiseToPayService, PromiseToPayService>();
-// builder.Services.AddScoped<IPaymentService, PaymentService>();
 // builder.Services.AddScoped<IFieldCollectionService, FieldCollectionService>();
 // builder.Services.AddScoped<ILMSIntegrationService, LMSIntegrationService>();
 // builder.Services.AddScoped<ICommunicationService, CommunicationService>();

@@ -1,0 +1,398 @@
+@page "/Cases/{CaseId:guid}"
+@using ClaudeCollectionApp.Models.Entities
+@using ClaudeCollectionApp.Models.Enums
+@using ClaudeCollectionApp.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject ICaseManagementService CaseService
+@inject IPromiseToPayService PTPService
+@inject IPaymentService PaymentService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Case @caseModel?.CaseNumber - Collection Management</PageTitle>
+
+@if (isLoading)
+{
+    <div class="loading-container">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p>Loading case details...</p>
+    </div>
+}
+else if (caseModel == null)
+{
+    <div class="empty-state">
+        <p>Case not found</p>
+        <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/Cases"))'>Back to Cases</button>
+    </div>
+}
+else
+{
+    <div class="page-container">
+        <!-- Header -->
+        <div class="page-header">
+            <div>
+                <div class="breadcrumb">
+                    <a href="/Cases">Cases</a> / @caseModel.CaseNumber
+                </div>
+                <h1>Case Details</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-outline-primary" @onclick="@(() => NavigationManager.NavigateTo($"/PTP/Create?caseId={CaseId}"))">
+                    Create PTP
+                </button>
+                <button class="btn btn-primary" @onclick="@(() => NavigationManager.NavigateTo($"/Payments/Record?caseId={CaseId}"))">
+                    Record Payment
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="summary-label">Case Number</div>
+                <div class="summary-value">@caseModel.CaseNumber</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Status</div>
+                <div class="summary-value">
+                    <span class="badge badge-@GetStatusClass(caseModel.Status)">@caseModel.Status</span>
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Current Bucket</div>
+                <div class="summary-value">
+                    <span class="badge badge-@GetBucketClass(caseModel.CurrentBucket)">@caseModel.CurrentBucket</span>
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Days Past Due</div>
+                <div class="summary-value">@caseModel.DaysPastDue days</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Total Outstanding</div>
+                <div class="summary-value">₹@caseModel.TotalOutstandingAmount.ToString("N2")</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Priority</div>
+                <div class="summary-value">
+                    <span class="priority-badge">@caseModel.Priority</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content-grid">
+            <!-- Customer Information -->
+            <div class="info-card">
+                <div class="card-header">
+                    <h3>Customer Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="info-row">
+                        <span class="info-label">Full Name</span>
+                        <span class="info-value">@caseModel.Customer.FullName</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Phone</span>
+                        <span class="info-value">@caseModel.Customer.PrimaryPhone</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Email</span>
+                        <span class="info-value">@(caseModel.Customer.Email ?? "N/A")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">PAN</span>
+                        <span class="info-value">@(caseModel.Customer.PANNumber ?? "N/A")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Address</span>
+                        <span class="info-value">@(caseModel.Customer.Address ?? "N/A")</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loan Account Information -->
+            <div class="info-card">
+                <div class="card-header">
+                    <h3>Loan Account Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="info-row">
+                        <span class="info-label">Loan Account Number</span>
+                        <span class="info-value">@caseModel.LoanAccount.LoanAccountNumber</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Product Type</span>
+                        <span class="info-value">@caseModel.LoanAccount.ProductName</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Loan Amount</span>
+                        <span class="info-value">₹@caseModel.LoanAccount.LoanAmount.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Disbursement Date</span>
+                        <span class="info-value">@caseModel.LoanAccount.DisbursementDate?.ToString("dd MMM yyyy")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Principal Outstanding</span>
+                        <span class="info-value">₹@caseModel.LoanAccount.PrincipalOutstanding.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Interest Outstanding</span>
+                        <span class="info-value">₹@caseModel.LoanAccount.InterestOutstanding.ToString("N2")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Penalty Outstanding</span>
+                        <span class="info-value">₹@caseModel.LoanAccount.PenaltyOutstanding.ToString("N2")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Promise to Pay Section -->
+        <div class="section-card">
+            <div class="card-header">
+                <h3>Promise to Pay (PTPs)</h3>
+                <button class="btn btn-sm btn-primary" @onclick="@(() => NavigationManager.NavigateTo($"/PTP/Create?caseId={CaseId}"))">
+                    Create PTP
+                </button>
+            </div>
+            <div class="card-body">
+                @if (ptps.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>PTP Number</th>
+                                    <th>Promised Date</th>
+                                    <th>Promised Amount</th>
+                                    <th>Payment Mode</th>
+                                    <th>Status</th>
+                                    <th>Confidence Level</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ptp in ptps.Take(5))
+                                {
+                                    <tr>
+                                        <td>@ptp.PTPNumber</td>
+                                        <td>@ptp.PromisedDate.ToString("dd MMM yyyy")</td>
+                                        <td>₹@ptp.PromisedAmount.ToString("N2")</td>
+                                        <td>@ptp.PaymentMode</td>
+                                        <td><span class="badge badge-@GetPTPStatusClass(ptp.Status)">@ptp.Status</span></td>
+                                        <td>@ptp.ConfidenceLevel%</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No PTPs recorded yet</p>
+                }
+            </div>
+        </div>
+
+        <!-- Payment History -->
+        <div class="section-card">
+            <div class="card-header">
+                <h3>Payment History</h3>
+                <button class="btn btn-sm btn-primary" @onclick="@(() => NavigationManager.NavigateTo($"/Payments/Record?caseId={CaseId}"))">
+                    Record Payment
+                </button>
+            </div>
+            <div class="card-body">
+                @if (payments.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Reference Number</th>
+                                    <th>Payment Date</th>
+                                    <th>Amount</th>
+                                    <th>Payment Mode</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var payment in payments.Take(10))
+                                {
+                                    <tr>
+                                        <td>@payment.PaymentReferenceNumber</td>
+                                        <td>@payment.PaymentDate.ToString("dd MMM yyyy HH:mm")</td>
+                                        <td>₹@payment.Amount.ToString("N2")</td>
+                                        <td>@payment.PaymentMode</td>
+                                        <td><span class="badge badge-@GetPaymentStatusClass(payment.Status)">@payment.Status</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No payments recorded yet</p>
+                }
+            </div>
+        </div>
+
+        <!-- Case Notes -->
+        <div class="section-card">
+            <div class="card-header">
+                <h3>Case Notes</h3>
+                <button class="btn btn-sm btn-primary" @onclick="ShowAddNoteDialog">
+                    Add Note
+                </button>
+            </div>
+            <div class="card-body">
+                @if (showAddNote)
+                {
+                    <div class="note-form">
+                        <textarea class="form-control" rows="3" @bind="newNoteText" placeholder="Enter your note..."></textarea>
+                        <div class="note-actions">
+                            <button class="btn btn-sm btn-primary" @onclick="AddNote">Save Note</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="@(() => showAddNote = false)">Cancel</button>
+                        </div>
+                    </div>
+                }
+
+                @if (notes.Any())
+                {
+                    <div class="notes-list">
+                        @foreach (var note in notes)
+                        {
+                            <div class="note-item @(note.IsPinned ? "pinned" : "")">
+                                <div class="note-header">
+                                    <span class="note-date">@note.NoteDate.ToString("dd MMM yyyy HH:mm")</span>
+                                    @if (note.IsPinned)
+                                    {
+                                        <span class="badge badge-warning">Pinned</span>
+                                    }
+                                </div>
+                                <div class="note-text">@note.NoteText</div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No notes added yet</p>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<link href="/css/dashboard.css" rel="stylesheet" />
+<link href="/css/case-detail.css" rel="stylesheet" />
+
+@code {
+    [Parameter] public Guid CaseId { get; set; }
+
+    private CollectionCase? caseModel;
+    private List<PromiseToPay> ptps = new();
+    private List<Payment> payments = new();
+    private List<CaseNote> notes = new();
+    private bool isLoading = true;
+    private bool showAddNote = false;
+    private string newNoteText = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCaseDetails();
+    }
+
+    private async Task LoadCaseDetails()
+    {
+        try
+        {
+            isLoading = true;
+
+            caseModel = await CaseService.GetCaseByIdAsync(CaseId);
+
+            if (caseModel != null)
+            {
+                ptps = (await PTPService.GetPTPsByCaseAsync(CaseId)).ToList();
+                payments = (await PaymentService.GetPaymentsByLoanAccountAsync(caseModel.LoanAccountId)).ToList();
+                notes = (await CaseService.GetCaseNotesAsync(CaseId)).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading case details: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowAddNoteDialog()
+    {
+        showAddNote = true;
+        newNoteText = string.Empty;
+    }
+
+    private async Task AddNote()
+    {
+        if (!string.IsNullOrWhiteSpace(newNoteText))
+        {
+            await CaseService.AddCaseNoteAsync(CaseId, newNoteText);
+            notes = (await CaseService.GetCaseNotesAsync(CaseId)).ToList();
+            showAddNote = false;
+            newNoteText = string.Empty;
+        }
+    }
+
+    private string GetStatusClass(CaseStatus status)
+    {
+        return status switch
+        {
+            CaseStatus.New => "primary",
+            CaseStatus.Active => "info",
+            CaseStatus.Resolved => "success",
+            CaseStatus.Closed => "secondary",
+            _ => "secondary"
+        };
+    }
+
+    private string GetBucketClass(DelinquencyBucket bucket)
+    {
+        return bucket switch
+        {
+            DelinquencyBucket.X => "success",
+            DelinquencyBucket.X1_30 => "info",
+            DelinquencyBucket.X31_60 => "warning",
+            _ => "danger"
+        };
+    }
+
+    private string GetPTPStatusClass(PTPStatus status)
+    {
+        return status switch
+        {
+            PTPStatus.Active => "info",
+            PTPStatus.Kept => "success",
+            PTPStatus.Broken => "danger",
+            PTPStatus.PartiallyKept => "warning",
+            PTPStatus.Cancelled => "secondary",
+            _ => "secondary"
+        };
+    }
+
+    private string GetPaymentStatusClass(PaymentStatus status)
+    {
+        return status switch
+        {
+            PaymentStatus.Pending => "warning",
+            PaymentStatus.Success => "success",
+            PaymentStatus.Failed => "danger",
+            PaymentStatus.Bounced => "danger",
+            PaymentStatus.Reversed => "secondary",
+            _ => "secondary"
+        };
+    }
+}

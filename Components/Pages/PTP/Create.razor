@@ -1,0 +1,323 @@
+@page "/PTP/Create"
+@using ClaudeCollectionApp.Models.Entities
+@using ClaudeCollectionApp.Models.Enums
+@using ClaudeCollectionApp.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IPromiseToPayService PTPService
+@inject ICaseManagementService CaseService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Create Promise to Pay - Collection Management</PageTitle>
+
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Create Promise to Pay</h1>
+            <p>Record a new promise to pay from customer</p>
+        </div>
+    </div>
+
+    <div class="form-container">
+        <EditForm Model="@ptpModel" OnValidSubmit="CreatePTP">
+            <DataAnnotationsValidator />
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success">@successMessage</div>
+            }
+
+            <div class="form-section">
+                <h3>PTP Details</h3>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Case Number *</label>
+                        <InputText class="form-control" @bind-Value="ptpModel.CaseNumber" placeholder="Enter case number" />
+                        <ValidationMessage For="@(() => ptpModel.CaseNumber)" />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Promised Amount *</label>
+                        <InputNumber class="form-control" @bind-Value="ptpModel.PromisedAmount" placeholder="Enter amount" />
+                        <ValidationMessage For="@(() => ptpModel.PromisedAmount)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Promised Date *</label>
+                        <InputDate class="form-control" @bind-Value="ptpModel.PromisedDate" />
+                        <ValidationMessage For="@(() => ptpModel.PromisedDate)" />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Payment Mode *</label>
+                        <InputSelect class="form-select" @bind-Value="ptpModel.PaymentMode">
+                            <option value="">Select payment mode</option>
+                            @foreach (var mode in Enum.GetValues<PaymentMode>())
+                            {
+                                <option value="@mode">@mode</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => ptpModel.PaymentMode)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Confidence Level (%) *</label>
+                        <InputNumber class="form-control" @bind-Value="ptpModel.ConfidenceLevel" min="0" max="100" />
+                        <ValidationMessage For="@(() => ptpModel.ConfidenceLevel)" />
+                        <small class="form-text">0-100, how confident are you this will be paid?</small>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>
+                            <InputCheckbox @bind-Value="ptpModel.IsSplitPTP" />
+                            Split PTP (Multiple Installments)
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            @if (ptpModel.IsSplitPTP)
+            {
+                <div class="form-section">
+                    <h3>Split Installments</h3>
+                    <p class="text-muted small">The system will create multiple PTPs for the split amounts</p>
+
+                    @foreach (var split in ptpModel.Splits)
+                    {
+                        var index = ptpModel.Splits.IndexOf(split);
+                        <div class="split-item">
+                            <h4>Installment @(index + 1)</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Amount *</label>
+                                    <InputNumber class="form-control" @bind-Value="split.Amount" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Date *</label>
+                                    <InputDate class="form-control" @bind-Value="split.Date" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Payment Mode *</label>
+                                    <InputSelect class="form-select" @bind-Value="split.Mode">
+                                        @foreach (var mode in Enum.GetValues<PaymentMode>())
+                                        {
+                                            <option value="@mode">@mode</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                @if (ptpModel.Splits.Count > 1)
+                                {
+                                    <div class="form-group">
+                                        <label>&nbsp;</label>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="@(() => RemoveSplit(split))">Remove</button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <button type="button" class="btn btn-outline-primary" @onclick="AddSplit">
+                        + Add Installment
+                    </button>
+                </div>
+            }
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span>
+                        <span> Creating PTP...</span>
+                    }
+                    else
+                    {
+                        <span>Create PTP</span>
+                    }
+                </button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+<style>
+    .split-item {
+        background: #f7fafc;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+    }
+
+    .split-item h4 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1a202c;
+        margin-bottom: 16px;
+    }
+
+    .form-text {
+        color: #718096;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery] public Guid? CaseId { get; set; }
+
+    private PTPModel ptpModel = new();
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isProcessing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (CaseId.HasValue)
+        {
+            var case_ = await CaseService.GetCaseByIdAsync(CaseId.Value);
+            if (case_ != null)
+            {
+                ptpModel.CaseNumber = case_.CaseNumber;
+            }
+        }
+
+        // Initialize with one split
+        ptpModel.Splits.Add(new SplitModel());
+    }
+
+    private async Task CreatePTP()
+    {
+        try
+        {
+            isProcessing = true;
+            errorMessage = null;
+            successMessage = null;
+
+            // Find case by number
+            var case_ = await CaseService.GetCaseByNumberAsync(ptpModel.CaseNumber);
+
+            if (case_ == null)
+            {
+                errorMessage = "Case not found";
+                return;
+            }
+
+            if (ptpModel.IsSplitPTP && ptpModel.Splits.Count > 1)
+            {
+                var splits = ptpModel.Splits
+                    .Select(s => (s.Amount, s.Date, s.Mode))
+                    .ToList();
+
+                var ptps = await PTPService.CreateSplitPTPAsync(
+                    case_.Id,
+                    splits,
+                    ptpModel.ConfidenceLevel
+                );
+
+                successMessage = $"Split PTP created successfully with {ptps.Count()} installments!";
+            }
+            else
+            {
+                var ptp = await PTPService.CreatePTPAsync(
+                    case_.Id,
+                    ptpModel.PromisedAmount,
+                    ptpModel.PromisedDate,
+                    ptpModel.PaymentMode,
+                    ptpModel.ConfidenceLevel
+                );
+
+                successMessage = $"PTP created successfully! PTP Number: {ptp.PTPNumber}";
+            }
+
+            // Reset form
+            ptpModel = new PTPModel();
+            ptpModel.Splits.Add(new SplitModel());
+
+            // Navigate back after a short delay
+            await Task.Delay(2000);
+            if (CaseId.HasValue)
+            {
+                NavigationManager.NavigateTo($"/Cases/{CaseId.Value}");
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/PTP");
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error creating PTP: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void AddSplit()
+    {
+        ptpModel.Splits.Add(new SplitModel());
+    }
+
+    private void RemoveSplit(SplitModel split)
+    {
+        if (ptpModel.Splits.Count > 1)
+        {
+            ptpModel.Splits.Remove(split);
+        }
+    }
+
+    private void Cancel()
+    {
+        if (CaseId.HasValue)
+        {
+            NavigationManager.NavigateTo($"/Cases/{CaseId.Value}");
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/PTP");
+        }
+    }
+
+    private class PTPModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Case number is required")]
+        public string CaseNumber { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Promised amount is required")]
+        [System.ComponentModel.DataAnnotations.Range(1, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
+        public decimal PromisedAmount { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Promised date is required")]
+        public DateTime PromisedDate { get; set; } = DateTime.Today.AddDays(1);
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Payment mode is required")]
+        public PaymentMode PaymentMode { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Confidence level is required")]
+        [System.ComponentModel.DataAnnotations.Range(0, 100, ErrorMessage = "Confidence level must be between 0 and 100")]
+        public int ConfidenceLevel { get; set; } = 70;
+
+        public bool IsSplitPTP { get; set; }
+        public List<SplitModel> Splits { get; set; } = new();
+    }
+
+    private class SplitModel
+    {
+        public decimal Amount { get; set; }
+        public DateTime Date { get; set; } = DateTime.Today.AddDays(1);
+        public PaymentMode Mode { get; set; }
+    }
+}
