@@ -1,69 +1,108 @@
-# PDF Merge Web Application
+# PDF Merge Blazor Application
 
-A simple, client-side web application for merging two PDF files into one. All processing happens in your browser - no files are uploaded to any server.
+A modern .NET Blazor WebAssembly application for merging two PDF files into one. Built with C# and running entirely in your browser - no files are uploaded to any server.
 
 ## Features
 
 - 📄 Merge two PDF files into a single document
-- 🎨 Modern, responsive user interface
+- 🎨 Modern, responsive Blazor UI
 - 🔒 100% client-side processing - your files stay private
 - 📱 Mobile-friendly design
 - 🎯 Drag and drop support
-- ⚡ Fast and efficient using pdf-lib library
-
-## How to Use
-
-1. Open `index.html` in any modern web browser
-2. Click on the first upload box or drag and drop your first PDF file
-3. Click on the second upload box or drag and drop your second PDF file
-4. Click the "Merge PDFs" button
-5. The merged PDF will be automatically downloaded to your device
+- ⚡ Fast and efficient using pdf-lib library with C# interop
+- 🔷 Built with .NET 8 and Blazor WebAssembly
 
 ## Technologies Used
 
-- HTML5
-- CSS3 (with modern gradients and animations)
-- JavaScript (ES6+)
-- [pdf-lib](https://pdf-lib.js.org/) - JavaScript library for PDF manipulation
+- **.NET 8** - Latest .NET framework
+- **Blazor WebAssembly** - Client-side C# web framework
+- **C#** - Primary programming language
+- **Razor Components** - Component-based UI
+- **JavaScript Interop** - For PDF manipulation
+- **[pdf-lib](https://pdf-lib.js.org/)** - JavaScript library for PDF manipulation
 
 ## File Structure
 
 ```
 ClaudeCollectionApp/
-├── index.html      # Main HTML structure
-├── styles.css      # Styling and responsive design
-├── script.js       # PDF merging functionality
-└── README.md       # This file
+├── PdfMergeApp.csproj          # Project file
+├── Program.cs                   # Application entry point
+├── App.razor                    # Root component
+├── _Imports.razor               # Global using directives
+├── Pages/
+│   └── Index.razor              # Main PDF merge page
+├── Shared/
+│   └── MainLayout.razor         # Layout component
+├── wwwroot/
+│   ├── index.html               # Host HTML page
+│   ├── css/
+│   │   └── app.css              # Application styles
+│   └── js/
+│       └── pdfMerge.js          # PDF merging JavaScript
+└── README.md                    # This file
 ```
+
+## Prerequisites
+
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
+
+## How to Run
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd ClaudeCollectionApp
+   ```
+
+2. **Restore dependencies**
+   ```bash
+   dotnet restore
+   ```
+
+3. **Run the application**
+   ```bash
+   dotnet run
+   ```
+
+4. **Open your browser**
+   - Navigate to `https://localhost:5001` (or the URL shown in the console)
+
+5. **Use the application**
+   - Click on the first upload box or drag and drop your first PDF file
+   - Click on the second upload box or drag and drop your second PDF file
+   - Click the "Merge PDFs" button
+   - The merged PDF will be automatically downloaded to your device
+
+## Build for Production
+
+To build the application for production deployment:
+
+```bash
+dotnet publish -c Release
+```
+
+The output will be in `bin/Release/net8.0/publish/wwwroot/`
+
+You can host these static files on any web server or static hosting service like:
+- Azure Static Web Apps
+- GitHub Pages
+- Netlify
+- Vercel
 
 ## Browser Compatibility
 
-Works with all modern browsers that support:
-- ES6+ JavaScript
-- FileReader API
-- Blob API
-
-Tested on:
+Works with all modern browsers that support WebAssembly:
 - Chrome/Edge (latest)
 - Firefox (latest)
 - Safari (latest)
 
 ## Privacy & Security
 
-- All PDF processing happens entirely in your browser
+- All PDF processing happens entirely in your browser via WebAssembly
 - No files are uploaded to any server
 - No data is stored or transmitted
 - Your documents remain completely private
-
-## Installation
-
-No installation required! Simply:
-
-1. Clone this repository or download the files
-2. Open `index.html` in your web browser
-3. Start merging PDFs!
-
-Alternatively, you can host it on any web server or GitHub Pages.
+- Runs completely client-side with no backend required
 
 ## Future Enhancements
 

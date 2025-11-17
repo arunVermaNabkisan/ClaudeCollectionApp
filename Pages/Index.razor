@@ -1,0 +1,218 @@
+@page "/"
+@inject IJSRuntime JSRuntime
+
+<PageTitle>PDF Merge Application</PageTitle>
+
+<div class="container">
+    <header>
+        <h1>PDF Merge Application</h1>
+        <p>Merge two PDF files into one</p>
+    </header>
+
+    <main>
+        <div class="upload-section">
+            <div class="file-upload @(file1Selected ? "file-selected" : "")">
+                <label>
+                    <div class="upload-box" @ondrop="@(async (e) => await HandleDrop(e, 1))" @ondragover:preventDefault @ondragleave="HandleDragLeave">
+                        <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <p>Click to upload first PDF</p>
+                        <span class="file-name">@fileName1</span>
+                    </div>
+                    <InputFile OnChange="@(async (e) => await HandleFileSelected(e, 1))" accept=".pdf" style="display: none;" />
+                </label>
+            </div>
+
+            <div class="plus-icon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+            </div>
+
+            <div class="file-upload @(file2Selected ? "file-selected" : "")">
+                <label>
+                    <div class="upload-box" @ondrop="@(async (e) => await HandleDrop(e, 2))" @ondragover:preventDefault @ondragleave="HandleDragLeave">
+                        <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <p>Click to upload second PDF</p>
+                        <span class="file-name">@fileName2</span>
+                    </div>
+                    <InputFile OnChange="@(async (e) => await HandleFileSelected(e, 2))" accept=".pdf" style="display: none;" />
+                </label>
+            </div>
+        </div>
+
+        <div class="action-section">
+            <button class="merge-btn" @onclick="MergePDFs" disabled="@(!canMerge)">Merge PDFs</button>
+
+            @if (showProgress)
+            {
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: @(progress)%;">@(progress)%</div>
+                </div>
+            }
+
+            <p class="status-message @statusClass">@statusMessage</p>
+        </div>
+
+        <div class="info-section">
+            <h3>How to use:</h3>
+            <ol>
+                <li>Select the first PDF file by clicking on the first upload box</li>
+                <li>Select the second PDF file by clicking on the second upload box</li>
+                <li>Click the "Merge PDFs" button to combine them</li>
+                <li>The merged PDF will be automatically downloaded</li>
+            </ol>
+        </div>
+    </main>
+
+    <footer>
+        <p>All processing happens in your browser - your files are never uploaded to a server</p>
+    </footer>
+</div>
+
+@code {
+    private string fileName1 = "No file selected";
+    private string fileName2 = "No file selected";
+    private bool file1Selected = false;
+    private bool file2Selected = false;
+    private bool canMerge = false;
+    private bool showProgress = false;
+    private int progress = 0;
+    private string statusMessage = "Select two PDF files to merge";
+    private string statusClass = "info";
+
+    private byte[]? pdfFile1;
+    private byte[]? pdfFile2;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initializePdfMerge");
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e, int fileNumber)
+    {
+        var file = e.File;
+
+        if (file.ContentType != "application/pdf")
+        {
+            ShowStatus("Please select a valid PDF file", "error");
+            return;
+        }
+
+        try
+        {
+            var buffer = new byte[file.Size];
+            await file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024).ReadAsync(buffer);
+
+            if (fileNumber == 1)
+            {
+                pdfFile1 = buffer;
+                fileName1 = file.Name;
+                file1Selected = true;
+            }
+            else
+            {
+                pdfFile2 = buffer;
+                fileName2 = file.Name;
+                file2Selected = true;
+            }
+
+            UpdateMergeButton();
+            ClearStatus();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Error loading file: {ex.Message}", "error");
+        }
+    }
+
+    private async Task HandleDrop(DragEventArgs e, int fileNumber)
+    {
+        // Drag and drop will be handled via JavaScript interop
+        // This is a placeholder for the Blazor event
+    }
+
+    private void HandleDragLeave(DragEventArgs e)
+    {
+        // Handle drag leave
+    }
+
+    private void UpdateMergeButton()
+    {
+        canMerge = file1Selected && file2Selected;
+    }
+
+    private void ShowStatus(string message, string type)
+    {
+        statusMessage = message;
+        statusClass = type;
+    }
+
+    private void ClearStatus()
+    {
+        statusMessage = "";
+        statusClass = "";
+    }
+
+    private async Task MergePDFs()
+    {
+        if (pdfFile1 == null || pdfFile2 == null)
+        {
+            ShowStatus("Please select both PDF files", "error");
+            return;
+        }
+
+        try
+        {
+            canMerge = false;
+            showProgress = true;
+            progress = 0;
+            ShowStatus("Loading PDF files...", "info");
+            StateHasChanged();
+
+            await Task.Delay(100);
+            progress = 10;
+            StateHasChanged();
+
+            // Convert byte arrays to base64 for JavaScript interop
+            var pdf1Base64 = Convert.ToBase64String(pdfFile1);
+            var pdf2Base64 = Convert.ToBase64String(pdfFile2);
+
+            progress = 40;
+            ShowStatus("Merging PDFs...", "info");
+            StateHasChanged();
+
+            // Call JavaScript function to merge PDFs
+            await JSRuntime.InvokeVoidAsync("mergePDFsInBrowser", pdf1Base64, pdf2Base64);
+
+            progress = 100;
+            ShowStatus("PDFs merged successfully!", "success");
+            StateHasChanged();
+
+            await Task.Delay(2000);
+            showProgress = false;
+            ShowStatus("Ready to merge more PDFs", "info");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Error merging PDFs: {ex.Message}", "error");
+            showProgress = false;
+        }
+        finally
+        {
+            canMerge = file1Selected && file2Selected;
+        }
+    }
+}
