@@ -94,7 +94,7 @@ public class CollectionCase : BaseEntity
 
     public int PTPsKept { get; set; }
 
-    public int PTPs Broken { get; set; }
+    public int PTPsBroken { get; set; }
 
     [Column(TypeName = "decimal(5,2)")]
     public decimal PTPKeepRatio { get; set; }
